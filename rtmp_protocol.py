@@ -199,6 +199,7 @@ class RtmpReader:
 
         return event
 
+
 class RtmpWriter:
     """ This class writes RTMP messages into a stream. """
 
@@ -374,6 +375,8 @@ class FlashSharedObject:
                 self.on_delete(key)
             elif event_type == SOEventTypes.MESSAGE:
                 self.on_message(event['data'])
+            elif event_type == SOEventTypes.USE_SUCCESS:
+                pass
             else:
                 assert False, event
 
@@ -434,7 +437,8 @@ class RtmpClient:
                 {
                     'videoCodecs': 252,
                     'audioCodecs': 3191,
-                    'flashVer': u'WIN 10,1,85,3',
+                    # 'flashVer': u'WIN 10,1,85,3',
+                    'flashVer': u'JUV 5,1,0,5,0',
                     'app': self.app,
                     'tcUrl': self.tc_url,
                     'videoFunction': 1,
@@ -455,16 +459,14 @@ class RtmpClient:
             if self.handle_message_pre_connect(msg):
                 break
 
-    def call(self, proc_name, parameters = {}, trans_id = 0):
+    def call(self, proc_name, args = (), trans_id = 0, command_info = None):
         """ Runs remote procedure calls (RPC) at the receiving end. """
         msg = {
             'msg': DataTypes.COMMAND,
-            'command':
-            [
+            'command': [
                 proc_name,
                 trans_id,
-                parameters
-            ]
+                command_info] + list(args)
         }
         self.writer.write(msg)
         self.writer.flush()
@@ -544,4 +546,16 @@ class RtmpClient:
             self.writer.flush()
             return True
 
+        if msg['msg'] == DataTypes.COMMAND:
+            command = msg['command']
+            trans_id = command[1]
+            command_info = command[2]
+            response = command[3]
+            self.on_command(trans_id, response, command_info)
+            return True
+
         return False
+
+    def on_command(self, trans_id, response, command_info):
+        """Handle command returned from flash server."""
+        pass
