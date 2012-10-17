@@ -10,7 +10,6 @@ setup(
     # Get more strings from
     # http://pypi.python.org/pypi?:action=list_classifiers
     classifiers=[
-        "License :: OSI Approved :: BSD License",
         "Programming Language :: Python",
         "Programming Language :: Python :: 2.6",
         "Programming Language :: Python :: 2.7"],
@@ -18,7 +17,7 @@ setup(
     author='',
     author_email='',
     url='',
-    license='BSD',
+    license='',
     packages=find_packages(exclude=['ez_setup']),
     include_package_data=True,
     zip_safe=False,
