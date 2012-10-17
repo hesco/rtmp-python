@@ -1,7 +1,9 @@
 Changelog
 ---------
 
-0.1 (XXXX-XX-XX)
+0.1 (2012-10-17)
 ================
 
-- Initial release
+- Added setup.py and docs. [taito]
+- Updated method: call to deal with command response from flash server. [taito]
+- Initial release. [taito]
