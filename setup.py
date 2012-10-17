@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name='rtmp-python',
-    version='0.0',
+    version='0.1',
     description="RTMP",
     long_description=open("README.rst").read(),
     # Get more strings from
