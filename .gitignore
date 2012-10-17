@@ -5,6 +5,6 @@
 *~
 .DS_Store
 .long-description.html
-/docs/_build/*
+rtmp/protocol/docs/_build/*
 dist
 setup.cfg

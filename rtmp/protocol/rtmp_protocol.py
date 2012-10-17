@@ -2,12 +2,12 @@
 Provides classes for creating RTMP (Real Time Message Protocol) servers and
 clients.
 """
+from rtmp.protocol import rtmp_protocol_base
 
+import logging
 import pyamf.amf0
 import pyamf.util.pure
-import rtmp_protocol_base
 import socket
-import logging
 
 class FileDataTypeMixIn(pyamf.util.pure.DataTypeMixIn):
     """
