@@ -392,7 +392,7 @@ class FlashSharedObject:
 class RtmpClient:
     """ Represents an RTMP client. """
 
-    def __init__(self, ip, port, tc_url, page_url, swf_url, app):
+    def __init__(self, ip, port, tc_url, page_url, swf_url, app, flashVer=u'JUV 5,1,0,5,0'):
         """ Initialize a new RTMP client. """
         self.ip = ip
         self.port = port
@@ -401,6 +401,7 @@ class RtmpClient:
         self.swf_url = swf_url
         self.app = app
         self.shared_objects = []
+        self.flashVer = flashVer
 
     def handshake(self):
         """ Perform the handshake sequence with the server. """
@@ -438,7 +439,8 @@ class RtmpClient:
                     'videoCodecs': 252,
                     'audioCodecs': 3191,
                     # 'flashVer': u'WIN 10,1,85,3',
-                    'flashVer': u'JUV 5,1,0,5,0',
+                    # 'flashVer': u'JUV 5,1,0,5,0',
+                    'flashVer': self.flashVer,
                     'app': self.app,
                     'tcUrl': self.tc_url,
                     'videoFunction': 1,

@@ -1,6 +1,11 @@
 Changelog
 ---------
 
+0.3 (2012-11-xx)
+================
+
+- Got rid of hard coded flash version for class: RtmpClient. [taito]
+
 0.2 (2012-10-17)
 ================
 
