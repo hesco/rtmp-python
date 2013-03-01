@@ -14,14 +14,11 @@ def main():
     Start the client, connect to 127.0.0.1:80 and use 2 remote flash shared
     objects.
     """
-    client = rtmp_protocol.RtmpClient('127.0.0.1', 80, '', '', '', '')
-    client.connect([])
+    client = rtmp_protocol.RtmpClient(ip="localhost", port=1935, tc_url='rtmp://localhost/IOTStreaming', page_url='', swf_url='', app='IOTStreaming')
+    client.connect([["user-1234"]])
 
-    so_name = SO('so_name')
+    so_name = SO('queueSharedObject', True)
     client.shared_object_use(so_name)
-
-    so2_name = SO('so2_name')
-    client.shared_object_use(so2_name)
 
     client.handle_messages()
 
