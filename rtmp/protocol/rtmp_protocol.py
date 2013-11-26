@@ -47,9 +47,11 @@ class SOEventTypes:
     RELEASE = 2
     CHANGE = 4
     MESSAGE = 6
+    BAD_PERSISTENCE = 7
     CLEAR = 8
     DELETE = 9
     USE_SUCCESS = 11
+    
 
 class UserControlTypes:
     """ Represents an enumeration of the user control event types. """
@@ -124,7 +126,7 @@ class RtmpReader:
             obj_name = decoder.readString()
             curr_version = body_stream.read_ulong()
             flags = body_stream.read(8)
-
+            
             # A shared object message may contain a number of events.
             events = []
             while not body_stream.at_eof():
@@ -159,7 +161,7 @@ class RtmpReader:
         """
         so_body_type = body_stream.read_uchar()
         so_body_size = body_stream.read_ulong()
-
+        
         event = {'type':so_body_type}
         if event['type'] == SOEventTypes.USE:
             assert so_body_size == 0, so_body_size
@@ -194,6 +196,10 @@ class RtmpReader:
         elif event['type'] == SOEventTypes.USE_SUCCESS:
             assert so_body_size == 0, so_body_size
             event['data'] = ''
+        elif event['type'] == SOEventTypes.BAD_PERSISTENCE:
+            assert so_body_size != 0, so_body_size
+            print "decoder.readString() = ", decoder.readString()
+            event['data'] = decoder.readString()
         else:
             assert False, event['type']
 
@@ -237,7 +243,11 @@ class RtmpWriter:
         elif datatype == DataTypes.SHARED_OBJECT:
             encoder.serialiseString(message['obj_name'])
             body_stream.write_ulong(message['curr_version'])
-            body_stream.write(message['flags'])
+            #===================================================================
+            # This is changed from body_stream.write to body_stream.write_ulong
+            # because Red5 expects it to be int
+            #===================================================================
+            body_stream.write_ulong(int(message['flags']))
 
             for event in message['events']:
                 self.write_shared_object_event(event, body_stream)
@@ -310,13 +320,14 @@ class FlashSharedObject:
     inside the self.data dictionary.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, persistent=False):
         """
         Initialize a new Flash Remote SO with a given name and empty data.
         """
         self.name = name
-        self.data = {}
+        self.data = {'x':1}
         self.use_success = False
+        self.persistent=persistent 
 
     def use(self, reader, writer):
         """
@@ -324,11 +335,24 @@ class FlashSharedObject:
         remote changes to the SO should be now propagated to the client.
         """
         self.use_success = False
+        
+        if self.persistent is True:
+            #===================================================================
+            # This flag value is 2. I tells the server that the SharedObject 
+            # is persistent.
+            #===================================================================
+            flags = '\x32'
+        else:
+            #===================================================================
+            # This flag value is 1. I tells the server that the SharedObject 
+            # is not persistent.
+            #===================================================================
+            flags = '\x31'
 
         msg = {
             'msg': DataTypes.SHARED_OBJECT,
             'curr_version': 0,
-            'flags': '\x00\x00\x00\x00\x00\x00\x00\x00',
+            'flags': flags,
             'events': [
                 {
                     'data': '',
@@ -337,6 +361,7 @@ class FlashSharedObject:
             ],
             'obj_name': self.name
         }
+        print "msg[flags]=", msg['flags']
         writer.write(msg)
         writer.flush()
 
@@ -345,10 +370,9 @@ class FlashSharedObject:
         Handle an incoming RTMP message. Check if it is of any relevance for the
         specific SO and process it, otherwise ignore it.
         """
-        if message['msg'] == DataTypes.SHARED_OBJECT and \
-            message['obj_name'] == self.name:
+        if message['msg'] == DataTypes.SHARED_OBJECT and message['obj_name'] == self.name:
             events = message['events']
-
+            print "events = ", events
             if not self.use_success:
                 assert events[0]['type'] == SOEventTypes.USE_SUCCESS, events[0]
                 assert events[1]['type'] == SOEventTypes.CLEAR, events[1]
@@ -476,15 +500,34 @@ class RtmpClient:
     def handle_message_pre_connect(self, msg):
         """ Handle messages arriving before the connection is established. """
         if msg['msg'] == DataTypes.COMMAND:
-            assert msg['command'][0] == '_result', msg
-            assert msg['command'][1] == 1, msg
-            assert msg['command'][3]['code'] == \
-                'NetConnection.Connect.Success', msg
-            return True
+            if msg['command'][0] == '_result':
+                assert msg['command'][0] == '_result', msg
+                assert msg['command'][1] == 1, msg
+                assert msg['command'][3]['code'] == 'NetConnection.Connect.Success', msg
+                return True
+            elif msg['command'][0] == 'onBWCheck':
+                #===============================================================
+                # This is added to process the call from the server which
+                # measures the bandwith. It expects to get a value in return.
+                # The value is 0
+                #===============================================================
+                print "msg = ", msg
+                print msg['command'][1]
+                assert msg['command'][0] == 'onBWCheck', msg
+                self.onBWCheck()
+                return True
         elif msg['msg'] == DataTypes.WINDOW_ACK_SIZE:
-            assert msg['window_ack_size'] == 2500000, msg
+            #===================================================================
+            # This value is changed from 2500000 to 10000000L so it connects to
+            # the Red5 server
+            #===================================================================
+            assert msg['window_ack_size'] == 10000000L, msg
         elif msg['msg'] == DataTypes.SET_PEER_BANDWIDTH:
-            assert msg['window_ack_size'] == 2500000, msg
+            #===================================================================
+            # This value is changed from 2500000 to 10000000L so it connects to
+            # the Red5 server
+            #===================================================================
+            assert msg['window_ack_size'] == 10000000L, msg
             assert msg['limit_type'] == 2, msg
         elif msg['msg'] == DataTypes.USER_CONTROL:
             assert msg['event_type'] == UserControlTypes.STREAM_BEGIN, msg
@@ -537,27 +580,84 @@ class RtmpClient:
 
     def handle_simple_message(self, msg):
         """ Handle simple messages, e.g. ping requests. """
-        if msg['msg'] == DataTypes.USER_CONTROL and msg['event_type'] == \
-                UserControlTypes.PING_REQUEST:
-            resp = {
+        if msg['msg'] == DataTypes.USER_CONTROL:
+            if msg['event_type'] == UserControlTypes.PING_REQUEST:
+                print "UserControlTypes.PING_REQUEST"
+                resp = {
                 'msg':DataTypes.USER_CONTROL,
                 'event_type':UserControlTypes.PING_RESPONSE,
                 'event_data':msg['event_data'],
-            }
-            self.writer.write(resp)
-            self.writer.flush()
-            return True
-
-        if msg['msg'] == DataTypes.COMMAND:
-            command = msg['command']
-            trans_id = command[1]
-            command_info = command[2]
-            response = command[3]
-            self.on_command(trans_id, response, command_info)
-            return True
-
+                }
+                self.writer.write(resp)
+                self.writer.flush()
+                return True
+            elif msg['event_type'] == UserControlTypes.PING_RESPONSE:
+                print "UserControlTypes.PING_RESPONSE"
+            elif msg['event_type'] == UserControlTypes.SET_BUFFER_LENGTH:
+                print "UserControlTypes.SET_BUFFER_LENGTH"
+            elif msg['event_type'] == UserControlTypes.STREAM_BEGIN:
+                print "UserControlTypes.STREAM_BEGIN"
+                return True
+            elif msg['event_type'] == UserControlTypes.STREAM_DRY:
+                print "UserControlTypes.STREAM_DRY"
+            elif msg['event_type'] == UserControlTypes.STREAM_EOF:
+                print "UserControlTypes.STREAM_EOF"
+            elif msg['event_type'] == UserControlTypes.STREAM_IS_RECORDED:
+                print "UserControlTypes.STREAM_IS_RECORDED"
+        
+        elif msg['msg'] == DataTypes.COMMAND:
+            if msg['command'][0] == '_result':
+                assert msg['command'][0] == '_result', msg
+                assert msg['command'][1] == 1, msg
+                assert msg['command'][3]['code'] == 'NetConnection.Connect.Success', msg
+                return True   
+            elif msg['command'][0] == 'onBWCheck':
+                assert msg['command'][0] == 'onBWCheck', msg
+                self.onBWCheck()
+                return True
+            else:
+                print ">>>>>> Some other command"
+                print msg
+                
         return False
+    
+    def onBWCheck(self):
+        """ Handle method invoked from the server. It is used to determine the bandwith."""
+        print "onBWCheck"
+        resp = {
+                'msg':DataTypes.COMMAND,
+                'command':['_result', 3, None]
+                }
+#        resp = {
+#                'msg':DataTypes.USER_CONTROL,
+#                'event_type':UserControlTypes.PING_RESPONSE,
+#                'event_data':msg['event_data'],
+#                }
+        
+        self.writer.write(resp)
+        self.writer.flush()
+      
+class SO(FlashSharedObject):
+    """ Represents a sample shared object. """
 
-    def on_command(self, trans_id, response, command_info):
-        """Handle command returned from flash server."""
-        pass
+    def on_change(self, key):
+        """ Handle change events for the specific shared object. """
+        print '%s.sparam = "%s"' % (self.name, self.data['sparam'])
+
+def main():
+    """
+    Start the client, connect to 127.0.0.1:80 and use 2 remote flash shared
+    objects.
+    """
+    client = RtmpClient(ip="localhost", port=1935, tc_url='rtmp://localhost/IOTStreaming', page_url='', swf_url='', app='IOTStreaming')
+    client.connect([["user-1234"]])
+
+    so_name = SO('queue_SharedObject', True)
+    client.shared_object_use(so_name)
+
+    client.handle_messages()
+
+if __name__ == '__main__':
+    main()      
+  
+
